@@ -1,133 +1,447 @@
+<div align="center">
 
-# Restored Claude Code Source
+# Claude Code — Restored Source Tree
 
+**Anthropic 官方 CLI 工具 Claude Code 的源码逆向还原与深度分析项目**
 
-![Preview](preview.png)
+[![TypeScript](https://img.shields.io/badge/TypeScript-ESNext-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![React + Ink](https://img.shields.io/badge/UI-React%20%2B%20Ink-61DAFB?logo=react)](https://github.com/vadimdemedes/ink)
+[![Bun](https://img.shields.io/badge/Runtime-Bun%20%E2%89%A5%201.3.5-FBF0DB?logo=bun)](https://bun.sh/)
+[![License](https://img.shields.io/badge/License-SEE_LICENSE_IN_LICENSE.md-blue)]()
 
+</div>
 
-  This repository is a restored Claude Code source tree reconstructed primarily from source maps and missing-module backfilling.
+---
 
-  It is not the original upstream repository state. Some files were unrecoverable from source maps and have been replaced with compatibility shims or degraded implementations so the
-  project can install and run again.
+English | [中文](#中文说明)
 
-  ## Current status
+---
 
-  - The source tree is restorable and runnable in a local development workflow.
-  - `bun install` succeeds.
-  - `bun run version` succeeds.
-  - `bun run dev` now routes through the restored CLI bootstrap instead of the temporary `dev-entry` shim.
-  - `bun run dev --help` shows the full command tree from the restored CLI.
-  - A number of modules still contain restoration-time fallbacks, so behavior may differ from the original Claude Code implementation.
+## Background
 
-  ## Restored so far
+On **March 31, 2026**, Claude Code source material was discovered to be publicly accessible through `.map` files shipped in the npm distribution. The published source maps referenced unobfuscated TypeScript sources hosted in Anthropic's R2 storage bucket, making the entire `src/` snapshot publicly downloadable.
 
-  Recent restoration work has recovered several pieces beyond the initial source-map import:
+This repository is a **restored Claude Code source tree** based on that snapshot, with additional backfilling of missing modules, compatibility shims for unrecoverable native bindings, and **comprehensive architectural analysis documentation**.
 
-  - the default Bun scripts now start the real CLI bootstrap path
-  - bundled skill content for `claude-api` and `verify` has been rewritten from placeholder files into usable reference docs
-  - compatibility layers for Chrome MCP and Computer Use MCP now expose realistic tool catalogs and structured degraded-mode responses instead of empty stubs
-  - several explicit placeholder resources have been replaced with working fallback prompts for planning and permission-classifier flows
+> This repository is for **educational and research purposes only**. It does not claim ownership of the original code, and is not affiliated with, endorsed by, or maintained by Anthropic.
 
-  Remaining gaps are mostly private/native integrations where the original implementation was not recoverable from source maps, so those areas still rely on shims or reduced behavior.
+---
 
-  ## Why this exists
+## Scale
 
-  Source maps do not contain a full original repository:
+| Metric | Count |
+|--------|-------|
+| TypeScript / TSX files | 1,989 |
+| Total lines of code | ~514,000 |
+| Source directories | 37 |
+| Built-in tools | 50+ |
+| CLI subcommands | 195 |
+| React / Ink components | 357 |
+| React hooks | 121 |
+| Utility modules | 555 |
 
-  - type-only files are often missing
-  - build-time generated files may be absent
-  - private package wrappers and native bindings may not be recoverable
-  - dynamic imports and resource files are frequently incomplete
+---
 
-  This repository fills those gaps enough to produce a usable, runnable restored workspace.
+## Architecture
 
-  ## Run
+### Bootstrap Flow
 
-  Requirements:
+```
+bun run dev
+  │
+  ├─► src/bootstrap-entry.ts        ─── Initialize macro, route to CLI
+  │     └─► src/entrypoints/cli.tsx  ─── Fast-path routing, subcommand dispatch
+  │           └─► src/main.tsx       ─── Main REPL (4,691 lines)
+  │                 │
+  │                 ├── Parse CLI args (Commander.js)
+  │                 ├── Initialize auth & permissions
+  │                 ├── Assemble tool pool (50+ tools + MCP + plugins)
+  │                 ├── Configure model & API
+  │                 ├── Load session & memories
+  │                 └── Launch Ink TUI (React terminal UI)
+  │
+  └─► src/dev-entry.ts              ─── Dev mode: scan missing imports
+```
 
-  - Bun 1.3.5 or newer
-  - Node.js 24 or newer
+### System Layers
 
-  Install dependencies:
+```
+┌────────────────────────────────────────────────────────────┐
+│                      UI Layer                               │
+│   Ink TUI (25K LOC) · Vim Input · Keybindings · Components │
+├────────────────────────────────────────────────────────────┤
+│                   Application Layer                         │
+│   Main REPL (4.7K) · Query Engine · 195 Commands · Cron    │
+├────────────────────────────────────────────────────────────┤
+│                     Tool Layer (42K LOC)                    │
+│   Bash · File R/W/Edit · Grep · Glob · Web · LSP · MCP    │
+│   Agent · Skill · Task · Plan · Worktree · Notebook · Cron │
+├────────────────────────────────────────────────────────────┤
+│                  Services Layer (80K+ LOC)                  │
+│   API Client · MCP Client · OAuth · Plugins · Voice        │
+│   LSP · Compaction · Analytics · Rate Limiting              │
+├────────────────────────────────────────────────────────────┤
+│              Bridge & Communication Layer                   │
+│   Desktop/IDE Bridge · WebSocket · JWT · Session Mgmt      │
+├────────────────────────────────────────────────────────────┤
+│                  Infrastructure Layer                       │
+│   State Store · 121 Hooks · 555 Utils · 18 Type Defs      │
+└────────────────────────────────────────────────────────────┘
+```
 
-  ```bash
-  bun install
-  ```
+### Core Modules
 
-  Run the restored CLI:
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `src/main.tsx` | 4,691 | Main REPL — command dispatch, tool loop, TUI |
+| `src/services/api/claude.ts` | 3,419 | Anthropic API client |
+| `src/services/mcp/client.ts` | 3,348 | MCP protocol client |
+| `src/bridge/bridgeMain.ts` | 2,999 | Desktop/IDE remote bridge |
+| `src/bridge/replBridge.ts` | 2,406 | REPL-specific bridge |
+| `src/services/mcp/auth.ts` | 2,465 | MCP OAuth authentication |
+| `src/ink/ink.tsx` | 1,722 | Custom Ink terminal renderer |
+| `src/services/compact/compact.ts` | 1,705 | Session memory compaction |
+| `src/QueryEngine.ts` | 793 | Query orchestration & tool-call loop |
+| `src/Tool.ts` | 793 | Tool base class, `buildTool()` factory |
 
-  ```bash
-  bun run dev
-  ```
+### Directory Map
 
-  Print the restored version:
+```
+src/
+├── tools/          # 50+ agent tool implementations (42K LOC)
+├── components/     # 357 React/Ink TUI components
+├── utils/          # 555 utility modules (auth, shell, streaming, etc.)
+├── services/       # API, MCP, OAuth, LSP, voice, plugins, analytics
+├── hooks/          # 121 React hooks (input, IDE, permissions, tasks)
+├── commands/       # 195 CLI subcommands (git, config, skills, etc.)
+├── bridge/         # Desktop/IDE remote bridge (WebSocket, JWT)
+├── ink/            # Ink framework customization & rendering
+├── state/          # App state store (immutable, custom)
+├── types/          # TypeScript type definitions
+├── skills/         # Bundled skill system
+├── plugins/        # Plugin architecture
+├── vim/            # Vim-mode input handling
+├── keybindings/    # Keybinding definitions & dispatch
+├── memdir/         # Persistent memory system
+├── buddy/          # Animated companion sprites
+├── voice/          # Voice command support
+├── coordinator/    # Multi-agent coordination
+├── migrations/     # Version migration scripts
+├── context/        # React context providers
+├── schemas/        # JSON schema definitions
+├── screens/        # Full-screen UI screens
+├── bootstrap/      # Bootstrap utilities
+├── entrypoints/    # CLI & assistant entry points
+├── ssh/            # SSH session support
+├── proactive/      # Proactive assistance
+├── jobs/           # Background job processing
+├── native-ts/      # Native module TypeScript implementations
+├── outputStyles/   # Output formatting styles
+└── moreright/      # Additional UI/UX features
 
-  ```bash
-  bun run version
-  ```
+shims/              # Compatibility shims for unrecoverable native modules
+vendor/             # Third-party native module sources
+docs/analysis/      # Comprehensive codebase analysis documents
+```
 
-  ## 中文说明
+---
 
-  # 还原后的 Claude Code 源码
+## Tool System
 
-  ![Preview](preview.png)
+Every tool Claude Code can invoke is a self-contained module with its own input schema, permission model, and execution logic.
 
-  这个仓库是一个主要通过 source map 逆向还原、再补齐缺失模块后得到的 Claude Code 源码树。
+### Tool Catalog
 
-  它并不是上游仓库的原始状态。部分文件无法仅凭 source map 恢复，因此目前仍包含兼容 shim 或降级实现，以便项目可以重新安装并运行。
+| Tool | Description |
+|------|-------------|
+| `BashTool` | Shell command execution with sandbox & permission model |
+| `PowerShellTool` | Windows PowerShell equivalent |
+| `FileReadTool` | File reading with PDF, image, notebook support |
+| `FileWriteTool` | File creation / overwrite |
+| `FileEditTool` | Partial file modification (string replacement) |
+| `GlobTool` | Fast file pattern matching search |
+| `GrepTool` | ripgrep-based content search |
+| `WebSearchTool` | Web search with filtering |
+| `WebFetchTool` | Fetch and convert web content |
+| `LSPTool` | Language Server Protocol (definition, references, hover, diagnostics) |
+| `MCPTool` | MCP server tool invocation |
+| `AgentTool` | Sub-agent spawning (explore, plan, verify, etc.) |
+| `SkillTool` | Skill execution |
+| `TaskCreate/Get/Update/List/Stop` | Task lifecycle management |
+| `CronCreate/List/Delete` | Scheduled trigger management |
+| `EnterPlanModeTool` / `ExitPlanModeTool` | Plan mode toggle |
+| `EnterWorktreeTool` / `ExitWorktreeTool` | Git worktree isolation |
+| `NotebookEditTool` | Jupyter notebook editing |
+| `AskUserQuestionTool` | Interactive user questions |
+| `ConfigTool` | Configuration management |
+| `BriefTool` | User notification messages |
+| `SleepTool` | Wait for specified duration |
+| `RemoteTriggerTool` | Remote trigger actions |
 
-  ### 当前状态
+---
 
-  - 该源码树已经可以在本地开发流程中恢复并运行。
-  - `bun install` 可以成功执行。
-  - `bun run version` 可以成功执行。
-  - `bun run dev` 现在会通过还原后的真实 CLI bootstrap 启动，而不是临时的 `dev-entry`。
-  - `bun run dev --help` 可以显示还原后的完整命令树。
-  - 仍有部分模块保留恢复期 fallback，因此行为可能与原始 Claude Code 实现不同。
+## Command System
 
-  ### 已恢复内容
+User-facing slash commands invoked with `/` prefix.
 
-  最近一轮恢复工作已经补回了最初 source-map 导入之外的几个关键部分：
+| Command | Description |
+|---------|-------------|
+| `/commit` | Create a git commit |
+| `/review` | Code review |
+| `/compact` | Context compression |
+| `/mcp` | MCP server management |
+| `/config` | Settings management |
+| `/doctor` | Environment diagnostics |
+| `/login` / `/logout` | Authentication |
+| `/memory` | Persistent memory management |
+| `/skills` | Skill management |
+| `/tasks` | Task management |
+| `/vim` | Vim mode toggle |
+| `/diff` | View changes |
+| `/cost` | Check usage cost |
+| `/theme` | Change theme |
+| `/context` | Context visualization |
+| `/pr_comments` | View PR comments |
+| `/resume` | Restore previous session |
+| `/share` | Share session |
+| `/desktop` | Desktop app handoff |
+| `/mobile` | Mobile app handoff |
+| `/permissions` | Permission management |
+| `/keybindings` | Keybinding configuration |
+| `/init` | Initialize project |
+| `/model` | Switch model |
+| `/fast` | Toggle fast mode |
+| `/upgrade` | Check for updates |
 
-  - 默认 Bun 脚本现在会走真实的 CLI bootstrap 路径
-  - `claude-api` 和 `verify` 的 bundled skill 内容已经从占位文件恢复为可用参考文档
-  - Chrome MCP 和 Computer Use MCP 的兼容层现在会暴露更接近真实的工具目录，并返回结构化的降级响应，而不是空 stub
-  - 一些显式占位资源已经替换为可用的 planning 与 permission-classifier fallback prompt
+---
 
-  当前剩余缺口主要集中在私有或原生集成部分，这些实现无法仅凭 source map 完整恢复，因此这些区域仍依赖 shim 或降级行为。
+## Design Patterns
 
-  ### 为什么会有这个仓库
+### Parallel Prefetch
+Startup time is optimized by prefetching MDM settings, keychain reads, and API preconnect in parallel before heavy module evaluation:
+```ts
+// main.tsx — fired as side-effects before other imports
+startMdmRawRead()
+startKeychainPrefetch()
+```
 
-  source map 本身并不能包含完整的原始仓库：
+### Feature Flags (Dead Code Elimination)
+Bun's `bun:bundle` feature flags enable build-time code stripping:
+```ts
+import { feature } from 'bun:bundle'
 
-  - 类型专用文件经常缺失
-  - 构建时生成的文件可能不存在
-  - 私有包包装层和原生绑定可能无法恢复
-  - 动态导入和资源文件经常不完整
+// Inactive code is completely stripped at build time
+const voiceCommand = feature('VOICE_MODE')
+  ? require('./commands/voice/index.js').default
+  : null
+```
 
-  这个仓库的目标是把这些缺口补到“可用、可运行”的程度，形成一个可继续修复的恢复工作区。
+Notable flags: `PROACTIVE`, `KAIROS`, `BRIDGE_MODE`, `DAEMON`, `VOICE_MODE`, `AGENT_TRIGGERS`, `MONITOR_TOOL`
 
-  ### 运行方式
+### Lazy Loading
+Heavy modules (OpenTelemetry, gRPC, analytics, feature-gated subsystems) are deferred via dynamic `import()` until actually needed.
 
-  环境要求：
+### Agent Swarms
+Sub-agents are spawned via `AgentTool`, with `coordinator/` handling multi-agent orchestration. `TeamCreateTool` enables team-level parallel work.
 
-  - Bun 1.3.5 或更高版本
-  - Node.js 24 或更高版本
+---
 
-  安装依赖：
+## Service Layer
 
-  ```bash
-  bun install
-  ```
+| Service | Description |
+|---------|-------------|
+| `api/` | Anthropic API client, file API, bootstrap |
+| `mcp/` | Model Context Protocol server connection and management |
+| `oauth/` | OAuth 2.0 authentication flow (PKCE) |
+| `lsp/` | Language Server Protocol manager |
+| `analytics/` | GrowthBook-based feature flags and analytics |
+| `plugins/` | Plugin loader and marketplace |
+| `compact/` | Conversation context compression |
+| `voice/` | Voice streaming and speech-to-text |
+| `teamMemorySync/` | Team memory synchronization |
+| `extractMemories/` | Automatic memory extraction |
 
-  运行恢复后的 CLI：
+---
 
-  ```bash
-  bun run dev
-  ```
+## Bridge System
 
-  输出恢复后的版本号：
+Bidirectional communication layer connecting IDE extensions (VS Code, JetBrains) with the CLI:
 
-  ```bash
-  bun run version
-  ```
+- `bridgeMain.ts` — Bridge main loop with reconnection & backoff
+- `replBridge.ts` — REPL session message routing
+- `remoteBridgeCore.ts` — Lightweight remote bridge core
+- `bridgeApi.ts` — Bridge API client
+- `jwtUtils.ts` — JWT-based authentication
+- `sessionRunner.ts` — Session execution management
+
+---
+
+## Quick Start
+
+### Requirements
+
+- **Bun** >= 1.3.5
+- **Node.js** >= 24
+
+### Install & Run
+
+```bash
+git clone https://github.com/Yangchengshuai/claude-code-rev.git
+cd claude-code-rev
+bun install           # Install dependencies (includes local shim packages)
+bun run dev           # Start the restored CLI interactively
+bun run version       # Print version + missing import count
+```
+
+### Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start the restored CLI interactively |
+| `bun run start` | Alias for `dev` |
+| `bun run version` | Print version + missing import count |
+| `bun run dev:restore-check` | Run via dev-entry with restoration diagnostics |
+
+---
+
+## Compatibility Shims
+
+Local `file:` packages in `shims/` that stub unrecoverable native modules:
+
+| Shim | Original Module | Status |
+|------|----------------|--------|
+| `ant-computer-use-input` | Screen capture / mouse input | Stub — no actual capture |
+| `ant-computer-use-mcp` | Computer use MCP server | Degraded — empty tool catalog |
+| `ant-computer-use-swift` | macOS Swift integration | Stub — no native bridge |
+| `ant-claude-for-chrome-mcp` | Chrome extension bridge | Stub — no browser connection |
+| `color-diff-napi` | Native color diff (N-API) | Fallback — JS implementation |
+| `modifiers-napi` | Keyboard modifier detection | Fallback — basic detection |
+| `url-handler-napi` | URL scheme registration | Stub — no-op |
+
+---
+
+## Tech Stack
+
+| Technology | Purpose |
+|-----------|---------|
+| TypeScript (ESNext) | Primary language |
+| React + Ink | Terminal UI framework |
+| Bun | Runtime & package manager |
+| Zod | Runtime schema validation |
+| Anthropic SDK | Claude API client |
+| MCP SDK | Model Context Protocol |
+| Commander.js | CLI argument parsing |
+| GrowthBook | Feature flags / A/B testing |
+| Yoga | Terminal flexbox layout |
+| Statsig / Datadog | Analytics & monitoring |
+| OpenTelemetry + gRPC | Telemetry |
+| OAuth 2.0 / JWT / PKCE | Authentication |
+
+---
+
+## Documentation
+
+Comprehensive codebase analysis documents in `docs/analysis/`:
+
+| Document | Content |
+|----------|---------|
+| [System Overview](docs/analysis/SYSTEM_OVERVIEW.md) | Architecture, module inventory, bootstrap flow, diagrams |
+| [Data Structures](docs/analysis/DATA_STRUCTURES.md) | AppState, Tool interface, Permissions, MCP, Settings, Memory |
+| [Data Flow](docs/analysis/DATA_FLOW.md) | Input pipeline, query engine, MCP connections, state updates |
+| [REPL Loop Algorithm](docs/analysis/ALGORITHM_REPL_LOOP.md) | Core loop state machine, permission resolution, compaction |
+| [Tool System Algorithm](docs/analysis/ALGORITHM_TOOL_SYSTEM.md) | Registration, BashTool security, file ops, agent orchestration |
+| [Key Functions](docs/analysis/KEY_FUNCTIONS.md) | main(), assembleToolPool(), buildTool(), query engine, MCP client |
+| [Q&A](docs/analysis/KEY_QUESTIONS.md) | 13 architecture questions + 5 common pitfalls with code evidence |
+
+---
+
+## Restoration Notes
+
+Known limitations of the reconstructed source tree:
+
+- **Missing type-only files** — Not present in source maps
+- **Build artifacts absent** — Generated files not recoverable
+- **Native bindings stubbed** — N-API modules replaced with shims
+- **Private packages shimmed** — Internal Anthropic packages degraded
+- **Dynamic imports incomplete** — Some lazy-loaded modules missing
+
+`src/dev-entry.ts` scans for missing relative imports on startup. The count shown by `bun run version` is a useful restoration health metric — when it reaches 0, the dev-entry forwards directly to the real CLI.
+
+---
+
+## Related Projects
+
+| Project | Description |
+|---------|-------------|
+| [oboard/claude-code-rev](https://github.com/oboard/claude-code-rev) | Original restored source tree (this repo's upstream) |
+| [nfeyre/claudecode-src](https://cnb.cool/nfeyre/claudecode-src) | Research-oriented mirror with detailed architecture docs |
+| [instructkr/claw-code](https://github.com/instructkr/claw-code) | Clean-room Python/Rust rewrite of Claude Code's harness |
+
+---
+
+## License
+
+See [LICENSE.md](LICENSE.md) for details.
+
+---
+
+<a id="中文说明"></a>
+
+## 中文说明
+
+2026 年 3 月 31 日，Claude Code 的源码通过 npm 包中暴露的 `.map` 文件被公开发现。该 source map 引用了 Anthropic R2 存储桶中未混淆的 TypeScript 源码，使整个 `src/` 快照可被公开下载。
+
+本仓库基于该快照进行**逆向还原**，补齐缺失模块、添加兼容性 shim，并附带**完整的架构分析文档**。
+
+> 本仓库仅供**教育和研究目的**。不声称对原始代码的所有权，与 Anthropic 无关联。
+
+### 项目规模
+
+- **1,989** 个 TypeScript/TSX 文件 | **~514,000** 行源代码
+- **50+** 内置工具 | **195** 个 CLI 子命令 | **357** 个 React 组件
+
+### 快速开始
+
+```bash
+git clone https://github.com/Yangchengshuai/claude-code-rev.git
+cd claude-code-rev
+bun install
+bun run dev        # 启动还原后的 CLI
+bun run version    # 查看版本及缺失导入数
+```
+
+### 核心架构
+
+```
+用户输入 → PromptInput (Vim/键绑定层) → 查询引擎 → Anthropic API
+                ↑                                    │
+                │                            流式响应解析
+                │                                    │
+                └───── 工具执行结果 ←─── 工具执行管道 ←─┘
+                         (权限检查 → 执行 → 渲染)
+```
+
+六层架构：**UI 层** → **应用层** → **工具层** → **服务层** → **桥接层** → **基础设施层**
+
+### 核心设计模式
+
+- **并行预取**：启动时并行加载 MDM 配置、Keychain 和 API 预连接
+- **Feature Flags**：通过 `bun:bundle` 实现编译期死代码消除
+- **懒加载**：重型模块（OpenTelemetry、gRPC 等）延迟至需要时加载
+- **Agent Swarms**：通过 AgentTool 生成子代理，coordinator 管理多代理编排
+
+### 详细文档
+
+[`docs/analysis/`](docs/analysis/) 目录包含 7 份完整源码分析文档，涵盖系统概述、数据结构、数据流、算法分析、关键函数和常见问题。
+
+### 相关项目
+
+- [oboard/claude-code-rev](https://github.com/oboard/claude-code-rev) — 原始还原源码树（本仓库上游）
+- [nfeyre/claudecode-src](https://cnb.cool/nfeyre/claudecode-src) — 研究导向的镜像，含详细架构文档
+- [instructkr/claw-code](https://github.com/instructkr/claw-code) — Claude Code harness 的 Python/Rust 重写
+
+---
+
+<div align="center">
+<i>Reconstructed & Analyzed with Claude Code · 2026</i>
+</div>
